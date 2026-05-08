@@ -5,32 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Avatar Animation</title>
     <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="scene-container" class="scene-container">
-      <img
-        class="scene-layer"
-        src="assets/Layer_0011_0.png"
-        alt=""
-        aria-hidden="true"
-      />
-
-      <img
-        class="scene-layer"
-        src="assets/Layer_0010_1.png"
-        alt=""
-        aria-hidden="true"
-      />
-
       <!-- your remaining scene-layer images here -->
-
-      <img
-        class="scene-layer"
-        src="assets/Layer_0007_Lights.png"
-        alt=""
-        aria-hidden="true"
-      />
     </div>
-    <script src="main.js"></script>
+    <script type="module" src="main.js"></script>
   </body>
 </html>
