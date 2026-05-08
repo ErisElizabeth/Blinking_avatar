@@ -59,3 +59,10 @@ The little thing blinked.
 
 - Added microphone-reactive mouth movement while preserving the independent blink controller.
 - Confirmed the mouth state responds to live mic input by accidentally making the avatar lip-sync to techno.
+
+## V0.0.3 Alpha Dev Build
+
+- Rebuilt the avatar as a layered puppet rig.
+- Separated body, arms, eyes, mouth, props, and effects into independent transparent PNG layers.
+- Confirmed the avatar can assemble on screen as a modular character.
+- Experienced immediate spiritual consequences.

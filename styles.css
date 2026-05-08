@@ -8,27 +8,12 @@ body {
   background-color: #d4bfbf;
 }
 
-.avatar-container {
-  position: relative;
-  display: inline-block;
-}
-
-.avatar-container img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 793px;
-  width: 928px;
-  display: block;
-  user-select: none;
-  pointer-events: none;
-}
-
 .scene-container {
   position: relative;
   width: 928px;
   height: 793px;
   border: 1px solid #000000;
+  overflow: hidden;
 }
 
 .scene-layer {
@@ -37,21 +22,20 @@ body {
   left: 0;
   width: 928px;
   height: 793px;
+  z-index: 1;
+  display: block;
   user-select: none;
   pointer-events: none;
 }
 
-#avatar {
+.avatar-part {
   position: absolute;
+  top: 0;
+  left: 0;
+  width: 928px;
+  height: 793px;
   z-index: 20;
-  top: 400px;
-  left: 250px;
-  height: 400px;
-  width: auto;
+  display: block;
   user-select: none;
   pointer-events: none;
-}
-
-.avatar-container {
-  border: 1px solid #000000;
 }

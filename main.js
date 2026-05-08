@@ -1,3 +1,40 @@
+const avatarAssets = {
+  torso: "assets/avatarTorso.png",
+
+  arms: {
+    rightUpper: "assets/avatarRightUpperArm.png",
+    rightUp: "assets/avatarRightUp.png",
+    rightDown: "assets/avatarRightDown.png",
+
+    leftUpper: "assets/avatarLeftUpperArm.png",
+    leftUp: "assets/avatarLeftUp.png",
+    leftDown: "assets/avatarLeftDown.png",
+  },
+
+  eyes: {
+    open: "assets/avatarEyesOpen.png",
+    closed: "assets/avatarEyesClosed.png",
+    tic: "assets/avatarTic.png",
+  },
+
+  mouth: {
+    closed: "assets/avatarMouthClosed.png",
+    open: "assets/avatarMouthOpen.png",
+    surprised: "assets/avatarMouthSurprised.png",
+  },
+
+  props: {
+    eraser: "assets/avatarEraser.png",
+    chalk: "assets/avatarChalk.png",
+  },
+
+  effects: {
+    hearts: "assets/avatarHearts.png",
+    stars: "assets/avatarStars.png",
+    thoughtBubble: "assets/avatarThoughtBubble.png",
+  },
+};
+
 const backgroundLayerSources = [
   "assets/Layer_0011_0.png",
   "assets/Layer_0010_1.png",
@@ -13,7 +50,6 @@ const backgroundLayerSources = [
   "assets/Layer_0007_Lights.png",
 ];
 
-const backgroundLayerImages = [];
 const sceneContainer = document.getElementById("scene-container");
 
 backgroundLayerSources.forEach((src) => {
@@ -25,15 +61,43 @@ backgroundLayerSources.forEach((src) => {
 
   sceneContainer.appendChild(img);
 });
-function preloadBackgroundLayers() {
-  backgroundLayerSources.forEach((src) => {
-    const img = new Image();
-    img.src = src;
-    backgroundLayerImages.push(img);
-  });
+
+//const backgroundLayerImages = [];
+
+const torsoLayer = document.createElement("img");
+const rightUpperArmLayer = document.createElement("img");
+const rightArmLayer = document.createElement("img");
+const leftUpperArmLayer = document.createElement("img");
+const leftArmLayer = document.createElement("img");
+const eyesLayer = document.createElement("img");
+const mouthLayer = document.createElement("img");
+const propLayer = document.createElement("img");
+const effectLayer = document.createElement("img");
+
+const avatarLayers = [
+  torsoLayer,
+  rightUpperArmLayer,
+  rightArmLayer,
+  leftUpperArmLayer,
+  leftArmLayer,
+  eyesLayer,
+  mouthLayer,
+  propLayer,
+  effectLayer,
+];
+
+avatarLayers.forEach((layer) => {
+  layer.classList.add("avatar-part");
+  layer.alt = "";
+  layer.setAttribute("aria-hidden", "true");
+  sceneContainer.appendChild(layer);
+});
+
+function capitalize(word) {
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
-preloadBackgroundLayers();
+//preloadBackgroundLayers();
 let smoothedVolume = 0;
 let eyesClosed = false;
 let mouthOpen = false;
@@ -89,31 +153,52 @@ async function startMic() {
   }
 }
 
-startMic();
 //requestAnimationFrame(checkVolume);
 
-const avatarStates = {
-  eyesOpenMouthClosed: "assets/avatarEyesOpen.png",
-  eyesClosedMouthClosed: "assets/avatarEyesClosed.png",
-  eyesOpenMouthOpen: "assets/avatarEyesOpenMouthOpen.png",
-  eyesClosedMouthOpen: "assets/avatarEyesClosedMouthOpen.png",
+const avatarState = {
+  eyes: "open",
+  mouth: "closed",
+  leftArm: "down",
+  rightArm: "down",
+  prop: null,
+  effect: null,
 };
 
 const BLINK_DURATION = 150;
 const MIN_INTERVAL = 1000;
 const BLINK_CHANCE = 0.005;
-
 function updateAvatarImage() {
-  const avatar = document.getElementById("avatar");
+  avatarState.eyes = eyesClosed ? "closed" : "open";
+  avatarState.mouth = mouthOpen ? "open" : "closed";
 
-  if (!eyesClosed && !mouthOpen) {
-    avatar.src = avatarStates.eyesOpenMouthClosed;
-  } else if (eyesClosed && !mouthOpen) {
-    avatar.src = avatarStates.eyesClosedMouthClosed;
-  } else if (!eyesClosed && mouthOpen) {
-    avatar.src = avatarStates.eyesOpenMouthOpen;
+  torsoLayer.src = avatarAssets.torso;
+
+  rightUpperArmLayer.src = avatarAssets.arms.rightUpper;
+  leftUpperArmLayer.src = avatarAssets.arms.leftUpper;
+
+  rightArmLayer.src =
+    avatarAssets.arms[`right${capitalize(avatarState.rightArm)}`];
+
+  leftArmLayer.src =
+    avatarAssets.arms[`left${capitalize(avatarState.leftArm)}`];
+
+  eyesLayer.src = avatarAssets.eyes[avatarState.eyes];
+  mouthLayer.src = avatarAssets.mouth[avatarState.mouth];
+
+  if (avatarState.prop) {
+    propLayer.src = avatarAssets.props[avatarState.prop];
+    propLayer.style.display = "block";
   } else {
-    avatar.src = avatarStates.eyesClosedMouthOpen;
+    propLayer.removeAttribute("src");
+    propLayer.style.display = "none";
+  }
+
+  if (avatarState.effect) {
+    effectLayer.src = avatarAssets.effects[avatarState.effect];
+    effectLayer.style.display = "block";
+  } else {
+    effectLayer.removeAttribute("src");
+    effectLayer.style.display = "none";
   }
 }
 
@@ -151,3 +236,4 @@ function endBlink(timestamp) {
 
 updateAvatarImage();
 requestAnimationFrame(animate);
+startMic();
