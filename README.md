@@ -54,3 +54,8 @@ V0.0.1 proves the core concept:
 You can create a reusable avatar scene where a character changes expression through code.
 
 The little thing blinked.
+
+## V0.0.2 Alpha Dev Build
+
+- Added microphone-reactive mouth movement while preserving the independent blink controller.
+- Confirmed the mouth state responds to live mic input by accidentally making the avatar lip-sync to techno.

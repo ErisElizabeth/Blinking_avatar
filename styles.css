@@ -24,9 +24,32 @@ body {
   pointer-events: none;
 }
 
-#avatar {
+.scene-container {
   position: relative;
-  z-index: 2;
+  width: 928px;
+  height: 793px;
+  border: 1px solid #000000;
+}
+
+.scene-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 928px;
+  height: 793px;
+  user-select: none;
+  pointer-events: none;
+}
+
+#avatar {
+  position: absolute;
+  z-index: 20;
+  top: 400px;
+  left: 250px;
+  height: 400px;
+  width: auto;
+  user-select: none;
+  pointer-events: none;
 }
 
 .avatar-container {
