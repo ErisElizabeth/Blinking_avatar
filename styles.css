@@ -1,0 +1,34 @@
+body {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 928px;
+  height: 793px;
+  margin: 0;
+  background-color: #d4bfbf;
+}
+
+.avatar-container {
+  position: relative;
+  display: inline-block;
+}
+
+.avatar-container img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 793px;
+  width: 928px;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+#avatar {
+  position: relative;
+  z-index: 2;
+}
+
+.avatar-container {
+  border: 1px solid #000000;
+}
