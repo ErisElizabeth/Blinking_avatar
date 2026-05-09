@@ -22,7 +22,7 @@ The project now includes a basic scene, a simple avatar, and procedural blink lo
 - Stick figure avatar displayed over the scene.
 - JavaScript-controlled blinking behavior.
 - Separate image states for open eyes and closed eyes.
-- Basic timing system using `requestAnimationFrame`.
+- Basic timing system using requestAnimationFrame.
 
 ## Technical Notes
 
@@ -75,16 +75,15 @@ This build keeps the original 2D puppet assets as project vocabulary, but change
 
 ### Version Numbers
 
-- Avatar build: `0.0.4-alpha`
-- Three.js: `0.164.1`
+- Avatar build: 0.0.4-alpha
 - Original backup preserved at: `C:\Users\S. Jones\Desktop\avatar_original_backup_20260508-184800`
 
 ### Changes Made In This Build
 
 - Replaced the visible layered sprite puppet with a simple grey-alien geometry rig.
-- Used `#639464` as the avatar color, with a subtle vertical gradient texture and soft additive glow.
-- Added a black 3D room using `#000000` walls.
-- Added many ghostly wireframe spheres in `#7f827f`, placed near the walls and ceiling so they stay away from the avatar.
+- Used #639464 as the avatar color, with a subtle vertical gradient texture and soft additive glow.
+- Added a black 3D room using #000000 walls.
+- Added many ghostly wireframe spheres in #7f827f, placed near the walls and ceiling so they stay away from the avatar.
 - Converted blink timing to an exponential-delay Poisson-style scheduler while keeping the original blink state structure.
 - Tightened microphone capture with echo cancellation, noise suppression, auto gain control, RMS volume tracking, adaptive noise floor calibration, and smoother attack/release response.
 - Expanded speech animation from simple closed/open switching into five procedural mouth states: closed, small, medium, open, and surprised.
@@ -107,8 +106,86 @@ This build keeps the original 2D puppet assets as project vocabulary, but change
 
 ### Technical Notes
 
-The old `updateAvatarImage()` function name is still present for continuity. It no longer swaps layered PNGs; it now synchronizes the avatar state with Three.js eye visibility and procedural mouth shape.
+The old updateAvatarImage() function name is still present for continuity. It no longer swaps layered PNGs; it now synchronizes the avatar state with Three.js eye visibility and procedural mouth shape.
 
 The microphone animation now measures time-domain RMS instead of averaging raw frequency bins. This tends to react more naturally to speech volume, avoids some low-level room noise, and gives the mouth enough signal detail to move through multiple states instead of snapping between two images.
 
 The app now uses ES modules, so it should be opened from a local web server instead of directly from the file system.
+
+## V0.0.5 Alpha Dev Build
+
+Chalkboard Routine And Extra Body Controls
+
+This build adds a small performance sequence while keeping the avatar primitive and geometry-driven.
+
+### Version Numbers
+
+- Avatar build: 0.0.5-alpha
+- Three.js: 0.164.1
+
+### Changes Made In This Build
+
+- Added a little hop mechanic for the avatar.
+- Added a both-hands-half-high pose.
+- Added a spawned floating chalkboard in #274c43 with simple box depth.
+- Added a primitive chalk cylinder in #e0dcdc.
+- Added a primitive eraser box in #b7b7b7.
+- Added write.mp3 and erase.mp3 as sequence sound effects.
+- Added a scripted chalkboard routine that walks the avatar to the board, writes text, presents it, erases it, despawns the board, and returns control.
+- Added an emergency cancel key that stops the routine, clears the board, hides tools, stops sound, and restores the avatar to the pre-routine state.
+- Added Caveat Brush as the chalkboard font for the written text.
+
+### New Keyboard Controls
+
+- `J`: small hop.
+- `H`: toggle both hands half high.
+- `B`: start the chalkboard routine.
+- `Escape`: cancel the chalkboard routine and restore the original state.
+
+### Chalkboard Routine Text
+
+```text
+Like, comment, and subscribe!
+www.eriselizabeth.com
+```
+
+### Technical Notes
+
+The chalkboard text is drawn to a canvas texture so it can be progressively revealed and erased inside the Three.js scene. The routine temporarily owns avatar movement and arm posing; normal keyboard control returns when it finishes or when Escape cancels it.
+
+## V0.0.6 Alpha Dev Build
+
+Lab Coat And Chalkboard Visibility Polish
+
+This build tightens the avatar's physical placement and improves the chalkboard read.
+
+### Version Numbers
+
+- Avatar build: 0.0.6-alpha
+- Three.js: 0.164.1
+
+### Changes Made In This Build
+
+- Raised the avatar rig so the feet sit on the floor instead of clipping below it.
+- Kept the jump as a true hop above the corrected floor height.
+- Added a primitive white lab coat at 80% opacity.
+- Built the coat from simple panels and capsule sleeves.
+- Attached the sleeve geometry to the arm segments so the coat sleeves move with the arms.
+- Expanded the avatar movement bounds so wall collisions happen much closer to the visible room walls.
+- Added a fade during the chalkboard writing/presentation beat so the avatar becomes very translucent and the board text remains readable.
+- Restored full avatar opacity after the five-second presentation hold and on animation cancel.
+
+## V0.0.7 Alpha Dev Build
+
+Tiny Coat And Routine Polish
+
+### Version Numbers
+
+- Avatar build: 0.0.7-alpha
+- Three.js: 0.164.1
+
+### Changes Made In This Build
+
+- Moved and angled the lab coat back panel away from the avatar body to reduce geometry poking through it.
+- Changed the chalkboard routine ending so the avatar stays near the board after erasing instead of walking back across the room.
+- Kept Escape behavior unchanged: cancel still restores the pre-routine state.

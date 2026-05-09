@@ -1,6 +1,6 @@
 import * as THREE from "three";
 
-const APP_VERSION = "0.0.4-alpha";
+const APP_VERSION = "0.0.7-alpha";
 const THREE_VERSION_PIN = "0.164.1";
 
 const avatarAssets = {
@@ -38,6 +38,11 @@ const avatarAssets = {
     stars: "assets/avatarStars.png",
     thoughtBubble: "assets/avatarThoughtBubble.png",
   },
+
+  sounds: {
+    write: "assets/write.mp3",
+    erase: "assets/erase.mp3",
+  },
 };
 
 const backgroundLayerSources = [
@@ -64,12 +69,32 @@ const sceneContainer = document.getElementById("scene-container");
 const ALIEN_COLOR = "#639464";
 const WALL_COLOR = "#000000";
 const GHOST_SPHERE_COLOR = "#7f827f";
+const CHALKBOARD_COLOR = "#274c43";
+const CHALK_COLOR = "#e0dcdc";
+const ERASER_COLOR = "#b7b7b7";
+const AVATAR_FLOOR_OFFSET = 0.64;
 
 const ROOM = {
   width: 12,
   height: 5.2,
   depth: 12,
-  avatarTravelLimit: 2.85,
+  avatarTravelLimit: 5.25,
+};
+
+const CHALKBOARD_LINES = [
+  "Like, comment, and subscribe!",
+  "www.eriselizabeth.com",
+];
+
+const CHALKBOARD_SEQUENCE = {
+  boardPosition: new THREE.Vector3(0, 2.42, -5.66),
+  writingPosition: new THREE.Vector3(0.18, 0, -4.42),
+  presentingPosition: new THREE.Vector3(-2.08, 0, -3.28),
+  avatarFadeOpacity: 0.1,
+  writeDuration: 6200,
+  holdDuration: 5000,
+  eraseDuration: 3200,
+  arrivalDistance: 0.065,
 };
 
 const clock = new THREE.Clock();
@@ -185,6 +210,36 @@ const ghostGlowMaterial = new THREE.MeshBasicMaterial({
   blending: THREE.AdditiveBlending,
 });
 
+const chalkboardMaterial = new THREE.MeshStandardMaterial({
+  color: CHALKBOARD_COLOR,
+  roughness: 0.9,
+  metalness: 0,
+  emissive: "#07100e",
+  emissiveIntensity: 0.25,
+});
+
+const chalkMaterial = new THREE.MeshStandardMaterial({
+  color: CHALK_COLOR,
+  roughness: 0.82,
+  metalness: 0,
+});
+
+const eraserMaterial = new THREE.MeshStandardMaterial({
+  color: ERASER_COLOR,
+  roughness: 0.78,
+  metalness: 0,
+});
+
+const labCoatMaterial = new THREE.MeshStandardMaterial({
+  color: "#ffffff",
+  roughness: 0.68,
+  metalness: 0,
+  transparent: true,
+  opacity: 0.8,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+
 //preloadBackgroundLayers();
 let smoothedVolume = 0;
 let eyesClosed = false;
@@ -222,6 +277,9 @@ const controlState = {
   keys: new Set(),
   avatarYaw: 0,
   walkPhase: 0,
+  jumpStart: 0,
+  jumpDuration: 520,
+  jumpHeight: 0.32,
   cameraYaw: 0,
   cameraDistance: 6.6,
   cameraHeight: 2.6,
@@ -244,11 +302,46 @@ const audioState = {
   permissionBlocked: false,
 };
 
+const soundEffects = Object.entries(avatarAssets.sounds).reduce(
+  (sounds, [name, path]) => {
+    const audio = new Audio(path);
+
+    audio.preload = "auto";
+    audio.volume = 0.82;
+    sounds[name] = audio;
+
+    return sounds;
+  },
+  {},
+);
+
+const chalkboardEvent = {
+  active: false,
+  phase: "idle",
+  phaseStart: 0,
+  savedState: null,
+  writeSoundPlaying: false,
+  eraseSoundPlaying: false,
+  isWalking: false,
+};
+
+const visualState = {
+  avatarOpacity: 1,
+  targetAvatarOpacity: 1,
+};
+
+const chalkFontReady = document.fonts
+  ? document.fonts.load('64px "Caveat Brush"').catch(() => null)
+  : Promise.resolve();
+
 const avatar = buildAvatar();
+avatar.root.position.y = AVATAR_FLOOR_OFFSET;
 scene.add(avatar.root);
 
 const effectSprites = buildEffectSprites();
 const ghostSpheres = buildGhostSpheres(120);
+const chalkboard = buildChalkboard();
+const heldTools = buildHeldTools();
 
 buildRoom();
 buildLighting();
@@ -310,26 +403,26 @@ function buildAvatar() {
 
   const parts = {};
 
-  const torso = makeAlienMesh(
-    new THREE.CapsuleGeometry(0.42, 0.86, 14, 24),
-    { position: [0, 1.2, 0], scale: [0.82, 1.05, 0.58] },
-  );
+  const torso = makeAlienMesh(new THREE.CapsuleGeometry(0.42, 0.86, 14, 24), {
+    position: [0, 1.2, 0],
+    scale: [0.82, 1.05, 0.58],
+  });
   torso.castShadow = true;
   body.add(torso);
   parts.torso = torso;
 
-  const hips = makeAlienMesh(
-    new THREE.SphereGeometry(1, 28, 18),
-    { position: [0, 0.76, 0], scale: [0.5, 0.22, 0.34] },
-  );
+  const hips = makeAlienMesh(new THREE.SphereGeometry(1, 28, 18), {
+    position: [0, 0.76, 0],
+    scale: [0.5, 0.22, 0.34],
+  });
   hips.castShadow = true;
   body.add(hips);
   parts.hips = hips;
 
-  const neck = makeAlienMesh(
-    new THREE.CylinderGeometry(0.11, 0.12, 0.42, 18),
-    { position: [0, 1.86, 0], scale: [0.9, 1, 0.9] },
-  );
+  const neck = makeAlienMesh(new THREE.CylinderGeometry(0.11, 0.12, 0.42, 18), {
+    position: [0, 1.86, 0],
+    scale: [0.9, 1, 0.9],
+  });
   neck.castShadow = true;
   body.add(neck);
   parts.neck = neck;
@@ -339,17 +432,17 @@ function buildAvatar() {
   body.add(head);
   parts.head = head;
 
-  const cranium = makeAlienMesh(
-    new THREE.SphereGeometry(1, 40, 28),
-    { position: [0, 0.34, 0], scale: [0.72, 0.92, 0.58] },
-  );
+  const cranium = makeAlienMesh(new THREE.SphereGeometry(1, 40, 28), {
+    position: [0, 0.34, 0],
+    scale: [0.72, 0.92, 0.58],
+  });
   cranium.castShadow = true;
   head.add(cranium);
 
-  const chin = makeAlienMesh(
-    new THREE.SphereGeometry(1, 32, 18),
-    { position: [0, -0.38, 0.03], scale: [0.45, 0.37, 0.41] },
-  );
+  const chin = makeAlienMesh(new THREE.SphereGeometry(1, 32, 18), {
+    position: [0, -0.38, 0.03],
+    scale: [0.45, 0.37, 0.41],
+  });
   chin.castShadow = true;
   head.add(chin);
 
@@ -379,6 +472,9 @@ function buildAvatar() {
   parts.leftLeg.hip.position.set(-0.22, 0.72, 0);
   parts.rightLeg.hip.position.set(0.22, 0.72, 0);
   body.add(parts.leftLeg.hip, parts.rightLeg.hip);
+
+  parts.labCoat = buildLabCoat(parts);
+  body.add(parts.labCoat.torso);
 
   return { root, body, parts };
 }
@@ -444,17 +540,19 @@ function makeArm(side) {
 
   const upperArm = makeLimbSegment(0.62, 0.075);
   const forearm = makeLimbSegment(0.58, 0.07);
-  const hand = makeAlienMesh(
-    new THREE.SphereGeometry(1, 18, 12),
-    { position: [0, -0.61, 0.035], scale: [0.11, 0.13, 0.08] },
-  );
+  const hand = makeAlienMesh(new THREE.SphereGeometry(1, 18, 12), {
+    position: [0, -0.61, 0.035],
+    scale: [0.11, 0.13, 0.08],
+  });
+  const toolSocket = new THREE.Group();
 
   shoulder.rotation.z = side * 0.2;
   elbow.position.y = -0.61;
   elbow.rotation.z = side * 0.08;
+  toolSocket.position.set(0, -0.66, 0.12);
 
   shoulder.add(upperArm, elbow);
-  elbow.add(forearm, hand);
+  elbow.add(forearm, hand, toolSocket);
 
   return {
     side,
@@ -463,6 +561,7 @@ function makeArm(side) {
     upperArm,
     forearm,
     hand,
+    toolSocket,
     targetZ: side * 0.2,
   };
 }
@@ -473,10 +572,10 @@ function makeLeg(side) {
 
   const thigh = makeLimbSegment(0.66, 0.085);
   const shin = makeLimbSegment(0.62, 0.075);
-  const foot = makeAlienMesh(
-    new THREE.SphereGeometry(1, 18, 12),
-    { position: [0, -0.64, 0.1], scale: [0.16, 0.07, 0.28] },
-  );
+  const foot = makeAlienMesh(new THREE.SphereGeometry(1, 18, 12), {
+    position: [0, -0.64, 0.1],
+    scale: [0.16, 0.07, 0.28],
+  });
 
   hip.rotation.z = side * 0.08;
   knee.position.y = -0.65;
@@ -504,6 +603,241 @@ function makeLimbSegment(length, radius) {
 
   mesh.castShadow = true;
   return mesh;
+}
+
+function buildLabCoat(parts) {
+  const torso = new THREE.Group();
+  torso.name = "primitive-lab-coat";
+
+  const back = makeCoatPanel([0, 1.13, -0.43], [0.76, 1.16, 0.045]);
+  const leftFront = makeCoatPanel([-0.16, 1.16, 0.32], [0.28, 1.18, 0.045]);
+  const rightFront = makeCoatPanel([0.16, 1.16, 0.32], [0.28, 1.18, 0.045]);
+  const lowerLeft = makeCoatPanel([-0.18, 0.62, 0.28], [0.26, 0.5, 0.05]);
+  const lowerRight = makeCoatPanel([0.18, 0.62, 0.28], [0.26, 0.5, 0.05]);
+  const leftLapels = makeCoatPanel([-0.14, 1.62, 0.36], [0.12, 0.44, 0.05]);
+  const rightLapels = makeCoatPanel([0.14, 1.62, 0.36], [0.12, 0.44, 0.05]);
+
+  leftFront.rotation.z = -0.05;
+  rightFront.rotation.z = 0.05;
+  back.rotation.x = 0.1;
+  lowerLeft.rotation.z = -0.05;
+  lowerRight.rotation.z = 0.05;
+  leftLapels.rotation.z = -0.42;
+  rightLapels.rotation.z = 0.42;
+
+  torso.add(
+    back,
+    leftFront,
+    rightFront,
+    lowerLeft,
+    lowerRight,
+    leftLapels,
+    rightLapels,
+  );
+
+  addCoatSleeves(parts.leftArm);
+  addCoatSleeves(parts.rightArm);
+
+  return { torso };
+}
+
+function makeCoatPanel(position, scale) {
+  const panel = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    labCoatMaterial.clone(),
+  );
+
+  panel.position.fromArray(position);
+  panel.scale.fromArray(scale);
+  panel.castShadow = true;
+  panel.receiveShadow = true;
+
+  return panel;
+}
+
+function addCoatSleeves(arm) {
+  const upperSleeve = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.088, 0.48, 8, 14),
+    labCoatMaterial.clone(),
+  );
+  const forearmSleeve = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.082, 0.44, 8, 14),
+    labCoatMaterial.clone(),
+  );
+
+  upperSleeve.name =
+    arm.side < 0 ? "left-upper-coat-sleeve" : "right-upper-coat-sleeve";
+  forearmSleeve.name =
+    arm.side < 0 ? "left-forearm-coat-sleeve" : "right-forearm-coat-sleeve";
+  upperSleeve.castShadow = true;
+  forearmSleeve.castShadow = true;
+
+  arm.upperArm.add(upperSleeve);
+  arm.forearm.add(forearmSleeve);
+}
+
+function buildChalkboard() {
+  const group = new THREE.Group();
+  group.name = "spawned-chalkboard";
+  group.position.copy(CHALKBOARD_SEQUENCE.boardPosition);
+  group.visible = false;
+
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(3.95, 1.72, 0.14),
+    chalkboardMaterial,
+  );
+  board.castShadow = true;
+  board.receiveShadow = true;
+  group.add(board);
+
+  const lip = new THREE.Mesh(
+    new THREE.BoxGeometry(4.05, 0.08, 0.18),
+    chalkboardMaterial.clone(),
+  );
+  lip.position.set(0, -0.9, 0.08);
+  lip.material.color.set("#1b3832");
+  group.add(lip);
+
+  const textCanvas = document.createElement("canvas");
+  textCanvas.width = 1024;
+  textCanvas.height = 512;
+
+  const textTexture = new THREE.CanvasTexture(textCanvas);
+  textTexture.colorSpace = THREE.SRGBColorSpace;
+  textTexture.minFilter = THREE.LinearFilter;
+  textTexture.magFilter = THREE.LinearFilter;
+
+  const textPlane = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.56, 1.24),
+    new THREE.MeshBasicMaterial({
+      map: textTexture,
+      transparent: true,
+      depthWrite: false,
+    }),
+  );
+
+  textPlane.position.set(0, 0.06, 0.085);
+  group.add(textPlane);
+
+  scene.add(group);
+
+  const boardData = {
+    group,
+    textPlane,
+    textCanvas,
+    textTexture,
+  };
+
+  drawChalkboardText(boardData, 0, 0);
+  return boardData;
+}
+
+function buildHeldTools() {
+  const chalk = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.026, 0.026, 0.36, 14),
+    chalkMaterial,
+  );
+  chalk.name = "right-hand-chalk";
+  chalk.rotation.x = Math.PI / 2;
+  chalk.position.set(0.02, 0, 0.08);
+  chalk.visible = false;
+
+  const eraser = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 0.08, 0.12),
+    eraserMaterial,
+  );
+  eraser.name = "right-hand-eraser";
+  eraser.position.set(0.025, 0, 0.075);
+  eraser.visible = false;
+
+  avatar.parts.rightArm.toolSocket.add(chalk, eraser);
+
+  return { chalk, eraser };
+}
+
+function drawChalkboardText(boardData, writeProgress, eraseProgress) {
+  const canvas = boardData.textCanvas;
+  const context = canvas.getContext("2d");
+  const visibleText = getRevealedChalkText(writeProgress);
+  const visibleWidth = canvas.width * (1 - eraseProgress);
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (visibleWidth <= 0 || !visibleText.some(Boolean)) {
+    boardData.textTexture.needsUpdate = true;
+    return;
+  }
+
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, visibleWidth, canvas.height);
+  context.clip();
+  context.fillStyle = CHALK_COLOR;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.shadowColor = "rgba(224, 220, 220, 0.42)";
+  context.shadowBlur = 4;
+
+  context.font = '72px "Caveat Brush", cursive';
+  context.fillText(visibleText[0], canvas.width / 2, 205);
+
+  context.font = '58px "Caveat Brush", cursive';
+  context.fillText(visibleText[1], canvas.width / 2, 315);
+
+  context.restore();
+  boardData.textTexture.needsUpdate = true;
+}
+
+function getRevealedChalkText(writeProgress) {
+  const totalCharacters = CHALKBOARD_LINES.join("\n").length;
+  let visibleCharacters = Math.floor(
+    totalCharacters * clamp(writeProgress, 0, 1),
+  );
+
+  return CHALKBOARD_LINES.map((line) => {
+    const revealed = line.slice(0, visibleCharacters);
+    visibleCharacters = Math.max(0, visibleCharacters - line.length - 1);
+
+    return revealed;
+  });
+}
+
+function showHeldTool(toolName) {
+  heldTools.chalk.visible = toolName === "chalk";
+  heldTools.eraser.visible = toolName === "eraser";
+  avatarState.prop = toolName;
+}
+
+function setChalkboardTextOverlay(enabled) {
+  chalkboard.textPlane.renderOrder = enabled ? 50 : 0;
+  chalkboard.textPlane.material.depthTest = !enabled;
+}
+
+function playSound(name, loop = false) {
+  const sound = soundEffects[name];
+
+  if (!sound) {
+    return;
+  }
+
+  sound.pause();
+  sound.currentTime = 0;
+  sound.loop = loop;
+  sound.play().catch((error) => {
+    console.warn(`${capitalize(name)} sound could not play:`, error);
+  });
+}
+
+function stopSound(name) {
+  const sound = soundEffects[name];
+
+  if (!sound) {
+    return;
+  }
+
+  sound.pause();
+  sound.currentTime = 0;
+  sound.loop = false;
 }
 
 function buildEffectSprites() {
@@ -570,7 +904,11 @@ function makeCroppedSpriteTexture(path, onReady) {
       sourceCanvas.width,
       sourceCanvas.height,
     );
-    const bounds = findAlphaBounds(imageData.data, sourceCanvas.width, sourceCanvas.height);
+    const bounds = findAlphaBounds(
+      imageData.data,
+      sourceCanvas.width,
+      sourceCanvas.height,
+    );
 
     if (!bounds) {
       return;
@@ -708,10 +1046,10 @@ function makeGhostSpherePosition() {
     );
   }
 
-  const avatarHeadSpace = new THREE.Vector3(0, 2.35, 0);
+  const avatarHeadSpace = new THREE.Vector3(0, AVATAR_FLOOR_OFFSET + 2.72, 0);
   const isNearAvatar =
-    position.distanceTo(avatarHeadSpace) < 3.25 ||
-    (Math.hypot(position.x, position.z) < 3.65 && position.y < 4.25);
+    position.distanceTo(avatarHeadSpace) < 4 ||
+    Math.hypot(position.x, position.z) < 3.75;
 
   if (isNearAvatar) {
     return makeGhostSpherePosition();
@@ -823,7 +1161,11 @@ function checkVolume() {
 
   const spike =
     audioState.voiceLevel - audioState.previousVoiceLevel > 0.22 ? 0.12 : 0;
-  const mouthLevel = clamp(Math.round((audioState.voiceLevel + spike) * 4), 0, 4);
+  const mouthLevel = clamp(
+    Math.round((audioState.voiceLevel + spike) * 4),
+    0,
+    4,
+  );
 
   audioState.targetMouthLevel = mouthLevel;
   mouthOpen = mouthLevel > 0;
@@ -857,8 +1199,11 @@ function animate(currentTime) {
   const elapsed = currentTime * 0.001;
 
   runBlinkController(currentTime);
+  updateChalkboardEvent(delta, currentTime);
   updateKeyboardMotion(delta, currentTime);
+  updateJump(currentTime);
   updateMouthGeometry(delta);
+  updateAvatarOpacity(delta);
   updateEffects(currentTime);
   updateGhostSphereMotion(elapsed);
   updateCamera(delta);
@@ -937,9 +1282,375 @@ function updateMouthGeometry(delta) {
   );
 }
 
+function setAvatarOpacityTarget(opacity, immediate = false) {
+  visualState.targetAvatarOpacity = clamp(opacity, 0, 1);
+
+  if (immediate) {
+    visualState.avatarOpacity = visualState.targetAvatarOpacity;
+    applyAvatarOpacity(visualState.avatarOpacity);
+  }
+}
+
+function updateAvatarOpacity(delta) {
+  visualState.avatarOpacity = THREE.MathUtils.damp(
+    visualState.avatarOpacity,
+    visualState.targetAvatarOpacity,
+    6,
+    delta,
+  );
+
+  applyAvatarOpacity(visualState.avatarOpacity);
+}
+
+function applyAvatarOpacity(opacity) {
+  avatar.root.traverse((object) => {
+    if (!object.isMesh || object.isSprite) {
+      return;
+    }
+
+    const materials = Array.isArray(object.material)
+      ? object.material
+      : [object.material];
+
+    materials.forEach((material) => {
+      if (!material) {
+        return;
+      }
+
+      if (material.userData.baseOpacity === undefined) {
+        material.userData.baseOpacity = material.opacity;
+        material.userData.baseTransparent = material.transparent;
+      }
+
+      material.opacity = material.userData.baseOpacity * opacity;
+      material.transparent =
+        material.userData.baseTransparent || opacity < 0.999;
+      material.depthWrite =
+        opacity >= 0.999 && material.userData.baseOpacity >= 0.999;
+    });
+  });
+}
+
+function startJump(currentTime) {
+  if (
+    chalkboardEvent.active ||
+    (controlState.jumpStart &&
+      currentTime - controlState.jumpStart < controlState.jumpDuration)
+  ) {
+    return;
+  }
+
+  controlState.jumpStart = currentTime;
+}
+
+function updateJump(currentTime) {
+  const jumpAge = currentTime - controlState.jumpStart;
+
+  if (
+    !controlState.jumpStart ||
+    jumpAge < 0 ||
+    jumpAge > controlState.jumpDuration ||
+    chalkboardEvent.active
+  ) {
+    avatar.root.position.y = AVATAR_FLOOR_OFFSET;
+    return;
+  }
+
+  const progress = jumpAge / controlState.jumpDuration;
+  avatar.root.position.y =
+    AVATAR_FLOOR_OFFSET +
+    Math.sin(progress * Math.PI) * controlState.jumpHeight;
+}
+
+function startChalkboardEvent(currentTime = performance.now()) {
+  if (chalkboardEvent.active) {
+    return;
+  }
+
+  chalkboardEvent.active = true;
+  chalkboardEvent.phase = "approach";
+  chalkboardEvent.phaseStart = currentTime;
+  chalkboardEvent.writeSoundPlaying = false;
+  chalkboardEvent.eraseSoundPlaying = false;
+  chalkboardEvent.isWalking = false;
+  chalkboardEvent.savedState = captureControlSnapshot();
+
+  avatar.root.position.y = AVATAR_FLOOR_OFFSET;
+  controlState.jumpStart = 0;
+  controlState.cameraYaw = 0;
+  controlState.cameraDistance = 7.2;
+  controlState.cameraHeight = 2.45;
+  controlState.keys.clear();
+  controlState.waveUntil = 0;
+
+  avatarState.leftArm = "down";
+  avatarState.rightArm = "down";
+  avatarState.effect = null;
+
+  chalkboard.group.visible = true;
+  setAvatarOpacityTarget(CHALKBOARD_SEQUENCE.avatarFadeOpacity);
+  setChalkboardTextOverlay(true);
+  showHeldTool(null);
+  drawChalkboardText(chalkboard, 0, 0);
+
+  chalkFontReady.then(() => {
+    if (chalkboardEvent.active && chalkboard.group.visible) {
+      drawChalkboardText(chalkboard, 0, 0);
+    }
+  });
+}
+
+function cancelChalkboardEvent() {
+  if (!chalkboardEvent.active) {
+    return;
+  }
+
+  finishChalkboardEvent(true);
+}
+
+function updateChalkboardEvent(delta, currentTime) {
+  if (!chalkboardEvent.active) {
+    return;
+  }
+
+  chalkboardEvent.isWalking = false;
+
+  if (chalkboardEvent.phase === "approach") {
+    avatarState.leftArm = "down";
+    avatarState.rightArm = "down";
+    chalkboardEvent.isWalking = moveAvatarToward(
+      CHALKBOARD_SEQUENCE.writingPosition,
+      Math.PI,
+      delta,
+      1.65,
+    );
+
+    if (!chalkboardEvent.isWalking || phaseAge(currentTime) > 3400) {
+      setChalkboardPhase("write", currentTime);
+    }
+  } else if (chalkboardEvent.phase === "write") {
+    const progress = clamp(
+      phaseAge(currentTime) / CHALKBOARD_SEQUENCE.writeDuration,
+      0,
+      1,
+    );
+
+    avatarState.leftArm = "half";
+    avatarState.rightArm = "write";
+    showHeldTool("chalk");
+    drawChalkboardText(chalkboard, progress, 0);
+
+    if (!chalkboardEvent.writeSoundPlaying) {
+      chalkboardEvent.writeSoundPlaying = true;
+      playSound("write", true);
+    }
+
+    if (progress >= 1) {
+      stopSound("write");
+      setChalkboardPhase("present", currentTime);
+    }
+  } else if (chalkboardEvent.phase === "present") {
+    avatarState.leftArm = "half";
+    avatarState.rightArm = "half";
+    showHeldTool(null);
+    drawChalkboardText(chalkboard, 1, 0);
+    chalkboardEvent.isWalking = moveAvatarToward(
+      CHALKBOARD_SEQUENCE.presentingPosition,
+      0,
+      delta,
+      1.45,
+    );
+
+    if (!chalkboardEvent.isWalking || phaseAge(currentTime) > 3600) {
+      setChalkboardPhase("hold", currentTime);
+    }
+  } else if (chalkboardEvent.phase === "hold") {
+    avatarState.leftArm = "down";
+    avatarState.rightArm = "down";
+    drawChalkboardText(chalkboard, 1, 0);
+
+    if (phaseAge(currentTime) >= CHALKBOARD_SEQUENCE.holdDuration) {
+      setAvatarOpacityTarget(1);
+      setChalkboardTextOverlay(false);
+      setChalkboardPhase("eraseApproach", currentTime);
+    }
+  } else if (chalkboardEvent.phase === "eraseApproach") {
+    avatarState.leftArm = "down";
+    avatarState.rightArm = "erase";
+    showHeldTool("eraser");
+    chalkboardEvent.isWalking = moveAvatarToward(
+      CHALKBOARD_SEQUENCE.writingPosition,
+      Math.PI,
+      delta,
+      1.65,
+    );
+
+    if (!chalkboardEvent.isWalking || phaseAge(currentTime) > 3400) {
+      setChalkboardPhase("erase", currentTime);
+    }
+  } else if (chalkboardEvent.phase === "erase") {
+    const progress = clamp(
+      phaseAge(currentTime) / CHALKBOARD_SEQUENCE.eraseDuration,
+      0,
+      1,
+    );
+
+    avatarState.leftArm = "half";
+    avatarState.rightArm = "erase";
+    showHeldTool("eraser");
+    drawChalkboardText(chalkboard, 1, progress);
+
+    if (!chalkboardEvent.eraseSoundPlaying) {
+      chalkboardEvent.eraseSoundPlaying = true;
+      playSound("erase", true);
+    }
+
+    if (progress >= 1) {
+      stopSound("erase");
+      chalkboard.group.visible = false;
+      drawChalkboardText(chalkboard, 0, 0);
+      showHeldTool(null);
+      finishChalkboardEvent(false);
+    }
+  } else if (chalkboardEvent.phase === "return") {
+    const target = chalkboardEvent.savedState?.position || new THREE.Vector3();
+    const yaw = chalkboardEvent.savedState?.avatarYaw || 0;
+
+    avatarState.leftArm = chalkboardEvent.savedState?.leftArm || "down";
+    avatarState.rightArm = chalkboardEvent.savedState?.rightArm || "down";
+    chalkboardEvent.isWalking = moveAvatarToward(target, yaw, delta, 1.65);
+
+    if (!chalkboardEvent.isWalking || phaseAge(currentTime) > 4200) {
+      finishChalkboardEvent(true);
+    }
+  }
+}
+
+function setChalkboardPhase(phase, currentTime) {
+  chalkboardEvent.phase = phase;
+  chalkboardEvent.phaseStart = currentTime;
+
+  if (phase !== "write") {
+    chalkboardEvent.writeSoundPlaying = false;
+  }
+
+  if (phase !== "erase") {
+    chalkboardEvent.eraseSoundPlaying = false;
+  }
+}
+
+function phaseAge(currentTime) {
+  return currentTime - chalkboardEvent.phaseStart;
+}
+
+function moveAvatarToward(targetPosition, targetYaw, delta, speed) {
+  const current = avatar.root.position;
+  const toTarget = new THREE.Vector3(
+    targetPosition.x - current.x,
+    0,
+    targetPosition.z - current.z,
+  );
+  const distance = toTarget.length();
+
+  if (distance > CHALKBOARD_SEQUENCE.arrivalDistance) {
+    const step = Math.min(distance, speed * delta);
+
+    toTarget.normalize();
+    current.x += toTarget.x * step;
+    current.z += toTarget.z * step;
+  }
+
+  controlState.avatarYaw = dampAngle(
+    controlState.avatarYaw,
+    targetYaw,
+    6,
+    delta,
+  );
+  avatar.root.rotation.y = controlState.avatarYaw;
+
+  return distance > CHALKBOARD_SEQUENCE.arrivalDistance * 1.7;
+}
+
+function dampAngle(current, target, lambda, delta) {
+  const deltaAngle = Math.atan2(
+    Math.sin(target - current),
+    Math.cos(target - current),
+  );
+  return current + deltaAngle * (1 - Math.exp(-lambda * delta));
+}
+
+function captureControlSnapshot() {
+  return {
+    position: avatar.root.position.clone(),
+    avatarYaw: controlState.avatarYaw,
+    cameraYaw: controlState.cameraYaw,
+    cameraDistance: controlState.cameraDistance,
+    cameraHeight: controlState.cameraHeight,
+    leftArm: avatarState.leftArm,
+    rightArm: avatarState.rightArm,
+    effect: avatarState.effect,
+    prop: avatarState.prop,
+  };
+}
+
+function restoreControlSnapshot(snapshot) {
+  if (!snapshot) {
+    return;
+  }
+
+  avatar.root.position.copy(snapshot.position);
+  avatar.root.position.y = snapshot.position.y || AVATAR_FLOOR_OFFSET;
+  controlState.avatarYaw = snapshot.avatarYaw;
+  controlState.cameraYaw = snapshot.cameraYaw;
+  controlState.cameraDistance = snapshot.cameraDistance;
+  controlState.cameraHeight = snapshot.cameraHeight;
+  avatar.root.rotation.y = controlState.avatarYaw;
+  avatar.body.position.y = 0;
+  avatarState.leftArm = snapshot.leftArm;
+  avatarState.rightArm = snapshot.rightArm;
+  avatarState.effect = snapshot.effect;
+  avatarState.prop = snapshot.prop;
+}
+
+function finishChalkboardEvent(restoreSnapshot) {
+  const savedState = chalkboardEvent.savedState;
+
+  stopSound("write");
+  stopSound("erase");
+  chalkboard.group.visible = false;
+  drawChalkboardText(chalkboard, 0, 0);
+  setChalkboardTextOverlay(false);
+  showHeldTool(null);
+  setAvatarOpacityTarget(1, true);
+
+  chalkboardEvent.active = false;
+  chalkboardEvent.phase = "idle";
+  chalkboardEvent.phaseStart = 0;
+  chalkboardEvent.savedState = null;
+  chalkboardEvent.writeSoundPlaying = false;
+  chalkboardEvent.eraseSoundPlaying = false;
+  chalkboardEvent.isWalking = false;
+
+  if (restoreSnapshot) {
+    restoreControlSnapshot(savedState);
+  } else {
+    avatarState.leftArm = "down";
+    avatarState.rightArm = "down";
+  }
+}
+
 function handleKeyDown(event) {
   if (isHandledControl(event.code)) {
     event.preventDefault();
+  }
+
+  if (event.code === "Escape") {
+    cancelChalkboardEvent();
+    return;
+  }
+
+  if (chalkboardEvent.active) {
+    return;
   }
 
   controlState.keys.add(event.code);
@@ -972,6 +1683,18 @@ function handleKeyDown(event) {
   if (event.code === "Space") {
     controlState.waveUntil = performance.now() + 1650;
   }
+
+  if (event.code === "KeyJ") {
+    startJump(performance.now());
+  }
+
+  if (event.code === "KeyH") {
+    toggleHalfHands();
+  }
+
+  if (event.code === "KeyB") {
+    startChalkboardEvent(performance.now());
+  }
 }
 
 function handleKeyUp(event) {
@@ -990,10 +1713,14 @@ function isHandledControl(code) {
     "KeyD",
     "KeyZ",
     "KeyX",
+    "KeyJ",
+    "KeyH",
+    "KeyB",
     "Digit1",
     "Digit2",
     "Digit3",
     "Space",
+    "Escape",
     "PageUp",
     "PageDown",
   ].includes(code);
@@ -1002,6 +1729,14 @@ function isHandledControl(code) {
 function toggleArm(sideName) {
   const key = `${sideName}Arm`;
   avatarState[key] = avatarState[key] === "up" ? "down" : "up";
+}
+
+function toggleHalfHands() {
+  const bothHalf =
+    avatarState.leftArm === "half" && avatarState.rightArm === "half";
+
+  avatarState.leftArm = bothHalf ? "down" : "half";
+  avatarState.rightArm = bothHalf ? "down" : "half";
 }
 
 function triggerEffect(name) {
@@ -1041,11 +1776,14 @@ function updateEffects(currentTime) {
 }
 
 function updateKeyboardMotion(delta, currentTime) {
+  if (chalkboardEvent.active) {
+    updateWalkCycle(delta, chalkboardEvent.isWalking, currentTime);
+    return;
+  }
+
   const keys = controlState.keys;
-  const forwardInput =
-    (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
-  const turnInput =
-    (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+  const forwardInput = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
+  const turnInput = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
 
   const cameraTurnInput =
     (keys.has("ArrowRight") ? 1 : 0) - (keys.has("ArrowLeft") ? 1 : 0);
@@ -1076,7 +1814,10 @@ function updateKeyboardMotion(delta, currentTime) {
   );
   const moveSpeed = 1.55;
 
-  avatar.root.position.addScaledVector(forward, forwardInput * moveSpeed * delta);
+  avatar.root.position.addScaledVector(
+    forward,
+    forwardInput * moveSpeed * delta,
+  );
   avatar.root.position.x = clamp(
     avatar.root.position.x,
     -ROOM.avatarTravelLimit,
@@ -1109,14 +1850,27 @@ function updateWalkCycle(delta, isWalking, currentTime) {
 
   const swing = Math.sin(controlState.walkPhase);
   const counterSwing = Math.sin(controlState.walkPhase + Math.PI);
-  const bob = Math.abs(Math.sin(controlState.walkPhase * 2)) * 0.035 * walkBlend;
+  const bob =
+    Math.abs(Math.sin(controlState.walkPhase * 2)) * 0.035 * walkBlend;
 
   avatar.body.position.y = bob;
 
   updateLegPose(avatar.parts.leftLeg, swing * walkBlend);
   updateLegPose(avatar.parts.rightLeg, counterSwing * walkBlend);
-  updateArmPose(avatar.parts.leftArm, "leftArm", counterSwing * walkBlend, delta, currentTime);
-  updateArmPose(avatar.parts.rightArm, "rightArm", swing * walkBlend, delta, currentTime);
+  updateArmPose(
+    avatar.parts.leftArm,
+    "leftArm",
+    counterSwing * walkBlend,
+    delta,
+    currentTime,
+  );
+  updateArmPose(
+    avatar.parts.rightArm,
+    "rightArm",
+    swing * walkBlend,
+    delta,
+    currentTime,
+  );
 }
 
 function updateLegPose(leg, swing) {
@@ -1126,11 +1880,28 @@ function updateLegPose(leg, swing) {
 
 function updateArmPose(arm, stateKey, walkSwing, delta, currentTime) {
   const isWaving = currentTime < controlState.waveUntil;
+  const armState = avatarState[stateKey];
   const baseZ = arm.side * 0.2;
+  const halfZ = arm.side * 1.12;
   const raisedZ = arm.side * 2.28;
-  let targetZ = avatarState[stateKey] === "up" ? raisedZ : baseZ;
+  let targetZ = armState === "up" ? raisedZ : baseZ;
   let targetX = walkSwing * 0.34;
   let elbowZ = arm.side * 0.08;
+
+  if (armState === "half") {
+    targetZ = halfZ;
+    targetX = walkSwing * 0.12;
+    elbowZ = arm.side * 0.18;
+  }
+
+  if (armState === "write" || armState === "erase") {
+    const scribbleSpeed = armState === "write" ? 0.016 : 0.024;
+    const scribble = Math.sin(currentTime * scribbleSpeed);
+
+    targetZ = arm.side * (1.72 + scribble * 0.08);
+    targetX = -0.78 + Math.cos(currentTime * scribbleSpeed * 0.7) * 0.08;
+    elbowZ = arm.side * (0.36 + scribble * 0.18);
+  }
 
   if (isWaving) {
     targetZ = arm.side * 2.08;
@@ -1175,7 +1946,9 @@ function updateGhostSphereMotion(elapsed) {
 }
 
 function updateCamera(delta) {
-  const target = avatar.root.position.clone().add(new THREE.Vector3(0, 1.65, 0));
+  const target = avatar.root.position
+    .clone()
+    .add(new THREE.Vector3(0, 1.65, 0));
   const cameraOffset = new THREE.Vector3(
     Math.sin(controlState.cameraYaw) * controlState.cameraDistance,
     controlState.cameraHeight,
