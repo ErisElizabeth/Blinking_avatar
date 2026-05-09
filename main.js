@@ -1,6 +1,7 @@
 import * as THREE from "three";
+import { ParametricGeometry } from "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/geometries/ParametricGeometry.js";
 
-const APP_VERSION = "0.0.7-alpha";
+const APP_VERSION = "0.0.10-alpha";
 const THREE_VERSION_PIN = "0.164.1";
 
 const avatarAssets = {
@@ -72,7 +73,7 @@ const GHOST_SPHERE_COLOR = "#7f827f";
 const CHALKBOARD_COLOR = "#274c43";
 const CHALK_COLOR = "#e0dcdc";
 const ERASER_COLOR = "#b7b7b7";
-const AVATAR_FLOOR_OFFSET = 0.64;
+const AVATAR_FLOOR_OFFSET = 0.69;
 
 const ROOM = {
   width: 12,
@@ -174,9 +175,16 @@ const alienGlowMaterial = new THREE.MeshBasicMaterial({
 
 const eyeMaterial = new THREE.MeshStandardMaterial({
   color: "#030503",
-  roughness: 0.44,
-  metalness: 0,
+  roughness: 0.16,
+  metalness: 0.08,
   emissive: "#000000",
+  side: THREE.DoubleSide,
+});
+
+const eyeHighlightMaterial = new THREE.MeshBasicMaterial({
+  color: "#f4fff6",
+  transparent: true,
+  opacity: 0.82,
 });
 
 const mouthMaterial = new THREE.MeshBasicMaterial({
@@ -230,16 +238,6 @@ const eraserMaterial = new THREE.MeshStandardMaterial({
   metalness: 0,
 });
 
-const labCoatMaterial = new THREE.MeshStandardMaterial({
-  color: "#ffffff",
-  roughness: 0.68,
-  metalness: 0,
-  transparent: true,
-  opacity: 0.8,
-  depthWrite: false,
-  side: THREE.DoubleSide,
-});
-
 //preloadBackgroundLayers();
 let smoothedVolume = 0;
 let eyesClosed = false;
@@ -266,11 +264,11 @@ const BLINK_CHANCE = 0.005;
 const BLINK_MEAN_INTERVAL = 4200;
 
 const mouthStates = [
-  { name: "closed", width: 0.24, height: 0.018, y: -0.43 },
-  { name: "small", width: 0.16, height: 0.055, y: -0.43 },
-  { name: "medium", width: 0.2, height: 0.095, y: -0.44 },
-  { name: "open", width: 0.25, height: 0.145, y: -0.45 },
-  { name: "surprised", width: 0.18, height: 0.21, y: -0.46 },
+  { name: "closed", width: 0.125, height: 0.01, y: -0.51 },
+  { name: "small", width: 0.09, height: 0.033, y: -0.51 },
+  { name: "medium", width: 0.115, height: 0.055, y: -0.515 },
+  { name: "open", width: 0.14, height: 0.078, y: -0.52 },
+  { name: "surprised", width: 0.105, height: 0.105, y: -0.525 },
 ];
 
 const controlState = {
@@ -328,6 +326,10 @@ const chalkboardEvent = {
 const visualState = {
   avatarOpacity: 1,
   targetAvatarOpacity: 1,
+};
+
+const breathingState = {
+  baseExpansion: 0,
 };
 
 const chalkFontReady = document.fonts
@@ -403,24 +405,17 @@ function buildAvatar() {
 
   const parts = {};
 
-  const torso = makeAlienMesh(new THREE.CapsuleGeometry(0.42, 0.86, 14, 24), {
-    position: [0, 1.2, 0],
-    scale: [0.82, 1.05, 0.58],
+  const torso = makeAlienMesh(makeSlenderTorsoGeometry(), {
+    position: [0, 1.28, 0],
+    scale: [1, 1, 0.68],
   });
+  torso.name = "single-long-slender-breathing-torso";
   torso.castShadow = true;
   body.add(torso);
   parts.torso = torso;
 
-  const hips = makeAlienMesh(new THREE.SphereGeometry(1, 28, 18), {
-    position: [0, 0.76, 0],
-    scale: [0.5, 0.22, 0.34],
-  });
-  hips.castShadow = true;
-  body.add(hips);
-  parts.hips = hips;
-
-  const neck = makeAlienMesh(new THREE.CylinderGeometry(0.11, 0.12, 0.42, 18), {
-    position: [0, 1.86, 0],
+  const neck = makeAlienMesh(new THREE.CylinderGeometry(0.085, 0.1, 0.54, 32), {
+    position: [0, 2.1, 0],
     scale: [0.9, 1, 0.9],
   });
   neck.castShadow = true;
@@ -428,53 +423,42 @@ function buildAvatar() {
   parts.neck = neck;
 
   const head = new THREE.Group();
-  head.position.set(0, 2.35, 0);
+  head.position.set(0, 2.55, 0);
   body.add(head);
   parts.head = head;
 
-  const cranium = makeAlienMesh(new THREE.SphereGeometry(1, 40, 28), {
-    position: [0, 0.34, 0],
-    scale: [0.72, 0.92, 0.58],
+  const headShell = makeAlienMesh(makePyriformHeadGeometry(), {
+    position: [0, 0.02, 0],
+    scale: [1, 1, 0.78],
   });
-  cranium.castShadow = true;
-  head.add(cranium);
+  headShell.name = "continuous-inverted-pyriform-head";
+  headShell.castShadow = true;
+  head.add(headShell);
+  parts.headShell = headShell;
 
-  const chin = makeAlienMesh(new THREE.SphereGeometry(1, 32, 18), {
-    position: [0, -0.38, 0.03],
-    scale: [0.45, 0.37, 0.41],
-  });
-  chin.castShadow = true;
-  head.add(chin);
-
-  addSoftGlow(cranium, head, 1.055, 0.055);
-  addSoftGlow(chin, head, 1.055, 0.045);
-
-  parts.leftEye = makeEye(-0.28, 0.12, 0.52, -0.14);
-  parts.rightEye = makeEye(0.28, 0.12, 0.52, 0.14);
+  parts.leftEye = makeEye(-0.29, -0.12, 0.405, -0.34);
+  parts.rightEye = makeEye(0.29, -0.12, 0.405, 0.34);
   head.add(parts.leftEye.open, parts.leftEye.closed);
   head.add(parts.rightEye.open, parts.rightEye.closed);
 
-  const mouth = new THREE.Mesh(new THREE.CircleGeometry(1, 40), mouthMaterial);
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(1, 36, 18), mouthMaterial);
   mouth.name = "procedural-mouth";
-  mouth.position.set(0, mouthStates[0].y, 0.555);
-  mouth.scale.set(mouthStates[0].width, mouthStates[0].height, 1);
+  mouth.position.set(0, mouthStates[0].y, 0.47);
+  mouth.scale.set(mouthStates[0].width, mouthStates[0].height, 0.018);
   head.add(mouth);
   parts.mouth = mouth;
 
   parts.leftArm = makeArm(-1);
   parts.rightArm = makeArm(1);
-  parts.leftArm.shoulder.position.set(-0.48, 1.63, 0);
-  parts.rightArm.shoulder.position.set(0.48, 1.63, 0);
+  parts.leftArm.shoulder.position.set(-0.28, 2, 0);
+  parts.rightArm.shoulder.position.set(0.28, 2, 0);
   body.add(parts.leftArm.shoulder, parts.rightArm.shoulder);
 
   parts.leftLeg = makeLeg(-1);
   parts.rightLeg = makeLeg(1);
-  parts.leftLeg.hip.position.set(-0.22, 0.72, 0);
-  parts.rightLeg.hip.position.set(0.22, 0.72, 0);
+  parts.leftLeg.hip.position.set(-0.15, 0.78, 0);
+  parts.rightLeg.hip.position.set(0.15, 0.78, 0);
   body.add(parts.leftLeg.hip, parts.rightLeg.hip);
-
-  parts.labCoat = buildLabCoat(parts);
-  body.add(parts.labCoat.torso);
 
   return { root, body, parts };
 }
@@ -514,15 +498,136 @@ function addSoftGlow(sourceMesh, parent, scale, opacity) {
   return glow;
 }
 
+function makeSlenderTorsoGeometry() {
+  // This torso is one continuous lathed surface, not a capsule plus a hip ring.
+  // The original vertex positions are stored so breathing can widen only the
+  // lower torso diameter each frame without stretching the whole avatar.
+  const profile = [];
+  const samples = 32;
+
+  for (let i = 0; i <= samples; i += 1) {
+    const t = i / samples;
+    const y = -0.78 + t * 1.72;
+    const lowerBase = Math.exp(-Math.pow((t - 0.1) / 0.3, 2)) * 0.055;
+    const waist = -Math.exp(-Math.pow((t - 0.42) / 0.22, 2)) * 0.032;
+    const chest = Math.exp(-Math.pow((t - 0.74) / 0.24, 2)) * 0.04;
+    const shoulderTaper = 1 - Math.max(0, t - 0.82) * 2.25;
+    const radius = (0.17 + lowerBase + waist + chest) * clamp(shoulderTaper, 0.58, 1);
+
+    profile.push(new THREE.Vector2(Math.max(0.045, radius), y));
+  }
+
+  const geometry = new THREE.LatheGeometry(profile, 80);
+  const positions = geometry.attributes.position;
+
+  geometry.userData.originalPositions = Float32Array.from(positions.array);
+  geometry.userData.minY = -0.78;
+  geometry.userData.maxY = 0.94;
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
+function updateTorsoBreathingGeometry(expansion) {
+  const torso = avatar.parts.torso;
+  const geometry = torso.geometry;
+  const originalPositions = geometry.userData.originalPositions;
+
+  if (!originalPositions) {
+    return;
+  }
+
+  const positions = geometry.attributes.position;
+  const minY = geometry.userData.minY;
+  const maxY = geometry.userData.maxY;
+  const height = maxY - minY;
+
+  for (let i = 0; i < positions.array.length; i += 3) {
+    const originalX = originalPositions[i];
+    const originalY = originalPositions[i + 1];
+    const originalZ = originalPositions[i + 2];
+    const verticalPosition = clamp((originalY - minY) / height, 0, 1);
+    const lowerTorsoInfluence = Math.pow(1 - verticalPosition, 2.6);
+    const diameterScale = 1 + expansion * lowerTorsoInfluence;
+
+    positions.array[i] = originalX * diameterScale;
+    positions.array[i + 1] = originalY;
+    positions.array[i + 2] = originalZ * diameterScale;
+  }
+
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+}
+
+function makePyriformHeadGeometry() {
+  // A lathed radius profile gives the head one continuous surface:
+  // broad upper cranium, narrowing cheeks, and a small tapered chin.
+  const profile = [];
+  const samples = 48;
+
+  for (let i = 0; i <= samples; i += 1) {
+    const t = i / samples;
+    const y = -0.74 + t * 1.94;
+    const roundness = Math.pow(Math.sin(Math.PI * t), 0.55);
+    const topWeight = 0.58 + 0.85 * t - 0.45 * t * t;
+    const cheekTaper = 1 - Math.max(0, 0.28 - t) * 0.75;
+    const radius = 0.72 * roundness * topWeight * cheekTaper;
+
+    profile.push(new THREE.Vector2(Math.max(0.001, radius), y));
+  }
+
+  profile[0].x = 0.001;
+  profile[profile.length - 1].x = 0.001;
+
+  const geometry = new THREE.LatheGeometry(profile, 96);
+
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+function makeAlmondEyeGeometry() {
+  // ParametricGeometry samples a leaf-shaped surface. Width collapses at the
+  // top and bottom, producing a real almond patch rather than a flat texture.
+  // A small forward dome makes the eye a solid-looking part of the face.
+  const geometry = new ParametricGeometry((u, v, target) => {
+    const centeredU = u - 0.5;
+    const centeredV = v - 0.5;
+    const vertical = centeredV * 2;
+    const almondWidth = Math.pow(Math.max(0, 1 - vertical * vertical), 0.72);
+    const x = centeredU * 0.42 * almondWidth;
+    const y = vertical * 0.34;
+    const dome = Math.max(0, 1 - Math.pow(centeredU * 2, 2) - vertical * vertical);
+    const z = Math.pow(dome, 0.65) * 0.042;
+
+    target.set(x, y, z);
+  }, 36, 30);
+
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function makeEye(x, y, z, tilt) {
-  const open = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 16), eyeMaterial);
+  const open = new THREE.Group();
   open.name = x < 0 ? "left-open-eye" : "right-open-eye";
   open.position.set(x, y, z);
+  open.rotation.y = x < 0 ? 0.26 : -0.26;
   open.rotation.z = tilt;
-  open.scale.set(0.15, 0.32, 0.025);
+
+  const lens = new THREE.Mesh(makeAlmondEyeGeometry(), eyeMaterial);
+  lens.name = x < 0 ? "left-almond-eye-solid" : "right-almond-eye-solid";
+  open.add(lens);
+
+  const reflection = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 16, 10),
+    eyeHighlightMaterial,
+  );
+  reflection.name = x < 0 ? "left-eye-reflection" : "right-eye-reflection";
+  reflection.position.set(x < 0 ? -0.035 : 0.035, 0.105, 0.05);
+  reflection.scale.set(0.035, 0.055, 0.012);
+  open.add(reflection);
 
   const closed = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.018, 0.23, 4, 10),
+    new THREE.CapsuleGeometry(0.018, 0.28, 8, 18),
     eyeMaterial,
   );
   closed.name = x < 0 ? "left-closed-eye" : "right-closed-eye";
@@ -537,22 +642,22 @@ function makeEye(x, y, z, tilt) {
 function makeArm(side) {
   const shoulder = new THREE.Group();
   const elbow = new THREE.Group();
+  const upperLength = 0.72;
+  const forearmLength = 0.69;
 
-  const upperArm = makeLimbSegment(0.62, 0.075);
-  const forearm = makeLimbSegment(0.58, 0.07);
-  const hand = makeAlienMesh(new THREE.SphereGeometry(1, 18, 12), {
-    position: [0, -0.61, 0.035],
-    scale: [0.11, 0.13, 0.08],
-  });
+  const upperArm = makeLimbSegment(upperLength, 0.064);
+  const forearm = makeLimbSegment(forearmLength, 0.058);
+  const hand = makeHand(side, forearmLength);
   const toolSocket = new THREE.Group();
 
   shoulder.rotation.z = side * 0.2;
-  elbow.position.y = -0.61;
+  elbow.position.y = -upperLength;
   elbow.rotation.z = side * 0.08;
-  toolSocket.position.set(0, -0.66, 0.12);
+  toolSocket.position.set(0, -0.065, 0.12);
 
   shoulder.add(upperArm, elbow);
-  elbow.add(forearm, hand, toolSocket);
+  hand.add(toolSocket);
+  elbow.add(forearm, hand);
 
   return {
     side,
@@ -570,15 +675,15 @@ function makeLeg(side) {
   const hip = new THREE.Group();
   const knee = new THREE.Group();
 
-  const thigh = makeLimbSegment(0.66, 0.085);
-  const shin = makeLimbSegment(0.62, 0.075);
-  const foot = makeAlienMesh(new THREE.SphereGeometry(1, 18, 12), {
-    position: [0, -0.64, 0.1],
-    scale: [0.16, 0.07, 0.28],
+  const thigh = makeLimbSegment(0.76, 0.07);
+  const shin = makeLimbSegment(0.72, 0.062);
+  const foot = makeAlienMesh(new THREE.SphereGeometry(1, 28, 16), {
+    position: [0, -0.73, 0.1],
+    scale: [0.14, 0.062, 0.25],
   });
 
   hip.rotation.z = side * 0.08;
-  knee.position.y = -0.65;
+  knee.position.y = -0.76;
   knee.rotation.x = 0.08;
 
   hip.add(thigh, knee);
@@ -597,7 +702,7 @@ function makeLeg(side) {
 function makeLimbSegment(length, radius) {
   const cylinderLength = Math.max(0.01, length - radius * 2);
   const mesh = makeAlienMesh(
-    new THREE.CapsuleGeometry(radius, cylinderLength, 10, 16),
+    new THREE.CapsuleGeometry(radius, cylinderLength, 18, 32),
     { position: [0, -length / 2, 0], scale: [1, 1, 1] },
   );
 
@@ -605,75 +710,45 @@ function makeLimbSegment(length, radius) {
   return mesh;
 }
 
-function buildLabCoat(parts) {
-  const torso = new THREE.Group();
-  torso.name = "primitive-lab-coat";
+function makeHand(side, forearmLength) {
+  const hand = new THREE.Group();
+  hand.name = side < 0 ? "left-three-fingered-hand" : "right-three-fingered-hand";
+  hand.position.set(0, -forearmLength, 0.04);
 
-  const back = makeCoatPanel([0, 1.13, -0.43], [0.76, 1.16, 0.045]);
-  const leftFront = makeCoatPanel([-0.16, 1.16, 0.32], [0.28, 1.18, 0.045]);
-  const rightFront = makeCoatPanel([0.16, 1.16, 0.32], [0.28, 1.18, 0.045]);
-  const lowerLeft = makeCoatPanel([-0.18, 0.62, 0.28], [0.26, 0.5, 0.05]);
-  const lowerRight = makeCoatPanel([0.18, 0.62, 0.28], [0.26, 0.5, 0.05]);
-  const leftLapels = makeCoatPanel([-0.14, 1.62, 0.36], [0.12, 0.44, 0.05]);
-  const rightLapels = makeCoatPanel([0.14, 1.62, 0.36], [0.12, 0.44, 0.05]);
+  const palm = makeAlienMesh(new THREE.SphereGeometry(1, 32, 18), {
+    position: [0, 0, 0],
+    scale: [0.095, 0.11, 0.075],
+  });
+  palm.name = side < 0 ? "left-palm" : "right-palm";
+  hand.add(palm);
 
-  leftFront.rotation.z = -0.05;
-  rightFront.rotation.z = 0.05;
-  back.rotation.x = 0.1;
-  lowerLeft.rotation.z = -0.05;
-  lowerRight.rotation.z = 0.05;
-  leftLapels.rotation.z = -0.42;
-  rightLapels.rotation.z = 0.42;
+  const fingerOffsets = [-0.055, 0, 0.055];
 
-  torso.add(
-    back,
-    leftFront,
-    rightFront,
-    lowerLeft,
-    lowerRight,
-    leftLapels,
-    rightLapels,
-  );
+  fingerOffsets.forEach((offset, index) => {
+    const finger = makeFinger(index - 1);
 
-  addCoatSleeves(parts.leftArm);
-  addCoatSleeves(parts.rightArm);
+    finger.position.set(offset, -0.12, 0.055);
+    finger.rotation.z = -offset * 1.8;
+    hand.add(finger);
+  });
 
-  return { torso };
+  return hand;
 }
 
-function makeCoatPanel(position, scale) {
-  const panel = new THREE.Mesh(
-    new THREE.BoxGeometry(1, 1, 1),
-    labCoatMaterial.clone(),
+function makeFinger(spreadIndex) {
+  const finger = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.022, 0.2, 10, 16),
+    alienMaterial,
   );
 
-  panel.position.fromArray(position);
-  panel.scale.fromArray(scale);
-  panel.castShadow = true;
-  panel.receiveShadow = true;
+  finger.name = `long-finger-${spreadIndex + 2}`;
+  finger.position.y = -0.05;
+  finger.rotation.x = 0.18;
+  finger.scale.y = spreadIndex === 0 ? 1.06 : 1;
+  finger.castShadow = true;
+  addSoftGlow(finger, finger, 1.04, 0.025);
 
-  return panel;
-}
-
-function addCoatSleeves(arm) {
-  const upperSleeve = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.088, 0.48, 8, 14),
-    labCoatMaterial.clone(),
-  );
-  const forearmSleeve = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.082, 0.44, 8, 14),
-    labCoatMaterial.clone(),
-  );
-
-  upperSleeve.name =
-    arm.side < 0 ? "left-upper-coat-sleeve" : "right-upper-coat-sleeve";
-  forearmSleeve.name =
-    arm.side < 0 ? "left-forearm-coat-sleeve" : "right-forearm-coat-sleeve";
-  upperSleeve.castShadow = true;
-  forearmSleeve.castShadow = true;
-
-  arm.upperArm.add(upperSleeve);
-  arm.forearm.add(forearmSleeve);
+  return finger;
 }
 
 function buildChalkboard() {
@@ -1202,6 +1277,7 @@ function animate(currentTime) {
   updateChalkboardEvent(delta, currentTime);
   updateKeyboardMotion(delta, currentTime);
   updateJump(currentTime);
+  updateBreathingMotion(elapsed);
   updateMouthGeometry(delta);
   updateAvatarOpacity(delta);
   updateEffects(currentTime);
@@ -1280,6 +1356,21 @@ function updateMouthGeometry(delta) {
     mouth.userData.targetY,
     damping,
   );
+}
+
+function updateBreathingMotion(elapsed) {
+  const isTalking =
+    audioState.targetMouthLevel > 0 ||
+    chalkboardEvent.phase === "write" ||
+    chalkboardEvent.phase === "erase";
+  const breathing = Math.sin(elapsed * 1.5) * 0.018;
+  const jitter = isTalking ? Math.sin(elapsed * 40) * 0.008 : 0;
+
+  // Breathing no longer scales the whole rig. Only the lower torso diameter
+  // expands and contracts, leaving the head, limbs, and feet stable for posing.
+  breathingState.baseExpansion = breathing + jitter;
+  updateTorsoBreathingGeometry(breathingState.baseExpansion);
+  avatar.body.position.y = avatar.body.userData.walkBob || 0;
 }
 
 function setAvatarOpacityTarget(opacity, immediate = false) {
@@ -1605,7 +1696,7 @@ function restoreControlSnapshot(snapshot) {
   controlState.cameraDistance = snapshot.cameraDistance;
   controlState.cameraHeight = snapshot.cameraHeight;
   avatar.root.rotation.y = controlState.avatarYaw;
-  avatar.body.position.y = 0;
+  avatar.body.userData.walkBob = 0;
   avatarState.leftArm = snapshot.leftArm;
   avatarState.rightArm = snapshot.rightArm;
   avatarState.effect = snapshot.effect;
@@ -1853,7 +1944,7 @@ function updateWalkCycle(delta, isWalking, currentTime) {
   const bob =
     Math.abs(Math.sin(controlState.walkPhase * 2)) * 0.035 * walkBlend;
 
-  avatar.body.position.y = bob;
+  avatar.body.userData.walkBob = bob;
 
   updateLegPose(avatar.parts.leftLeg, swing * walkBlend);
   updateLegPose(avatar.parts.rightLeg, counterSwing * walkBlend);

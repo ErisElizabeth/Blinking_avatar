@@ -189,3 +189,70 @@ Tiny Coat And Routine Polish
 - Moved and angled the lab coat back panel away from the avatar body to reduce geometry poking through it.
 - Changed the chalkboard routine ending so the avatar stays near the board after erasing instead of walking back across the room.
 - Kept Escape behavior unchanged: cancel still restores the pre-routine state.
+
+## V0.0.8 Alpha Dev Build
+
+More Defined Classic Grey Alien Rig
+
+### Version Numbers
+
+- Avatar build: `0.0.8-alpha`
+- Three.js: `0.164.1`
+
+### Changes Made In This Build
+
+- Increased geometry segment counts across the avatar so the body reads smoother and more defined.
+- Replaced the separate cranium/chin head with one continuous inverted pyriform head surface.
+- Made the head larger at the top and tapered toward the chin for a more classic grey alien silhouette.
+- Made the body slimmer and the limbs slightly longer.
+- Added three long primitive fingers to each hand.
+- Rebuilt the eyes as large beveled almond-shaped black solids.
+- Added small light reflections to the eyes so the face feels more alive.
+- Moved the eyes lower on the head and angled them inward toward the chin.
+- Changed the mouth to a shallow solid ellipsoid instead of a flat circle.
+- Added a subtle breathing scale pulse, with a faster tiny jitter while talking or during chalkboard writing/erasing.
+
+## V0.0.9 Alpha Dev Build
+
+Cleaner Usable Alien Rig Pass
+
+### Version Numbers
+
+- Avatar build: `0.0.9-alpha`
+- Three.js: `0.164.1`
+
+### Changes Made In This Build
+
+- Removed the lab coat so the whole rig reads as one alien body again.
+- Restored arms to the same `#639464` alien material as the rest of the rig.
+- Removed the center hip/ring form so the body is one long, slender torso.
+- Rebuilt the torso as a custom lathed geometry with stored original vertex positions.
+- Changed breathing so it only expands the lower torso diameter instead of scaling the full avatar.
+- Moved the arm attachment points higher, near the neck/shoulder/torso junction.
+- Shrunk and lowered the mouth so it fits the face more naturally.
+- Rebuilt the eyes as imported `ParametricGeometry` almond surfaces.
+- Set the eye patches into the face area instead of placing them far in front of the head.
+- Increased inward eye slant and kept the black material plus small reflections.
+
+### Technical Notes
+
+The torso breathing now works by rewriting the torso geometry's X/Z vertex positions from stored originals. The strongest expansion happens at the base of the torso and fades out toward the shoulders, so limb posing and head placement remain stable.
+
+## V0.0.10 Alpha Dev Build
+
+Modeling And Animation Guide
+
+### Version Numbers
+
+- Avatar build: `0.0.10-alpha`
+- Three.js: `0.164.1`
+
+### Changes Made In This Build
+
+- Added `MODELING_AND_ANIMATION_GUIDE.md`.
+- Documented the avatar hierarchy, scene setup, materials, geometry construction, movement controls, animation loops, microphone mouth states, breathing geometry, chalkboard routine, and practical editing checkpoints.
+- Kept runtime behavior unchanged except for the version label.
+
+### Guide
+
+Use `MODELING_AND_ANIMATION_GUIDE.md` as the main field manual for editing the alien model and animation controls.
